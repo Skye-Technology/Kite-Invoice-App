@@ -30,10 +30,10 @@ export default async function QuotationsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-neutral-900">Quotations</h2>
+        <h2 className="text-2xl font-bold text-neutral-900">Quotations</h2>
         <Link
           href="/quotations/new"
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white"
+          className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
         >
           New quotation
         </Link>
@@ -42,7 +42,7 @@ export default async function QuotationsPage() {
       {quotations.length === 0 ? (
         <p className="text-sm text-neutral-500">No quotations yet.</p>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-neutral-200 bg-neutral-50 text-neutral-500">
               <tr>
@@ -60,7 +60,7 @@ export default async function QuotationsPage() {
                   validUntilDate: quotation.validUntilDate,
                 });
                 return (
-                  <tr key={quotation.id}>
+                  <tr key={quotation.id} className="hover:bg-neutral-50">
                     <td className="px-4 py-3 font-medium text-neutral-900">
                       <Link href={`/quotations/${quotation.id}`} className="hover:underline">
                         {quotation.quotationNumber}

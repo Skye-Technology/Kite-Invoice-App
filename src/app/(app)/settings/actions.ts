@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireCompanyAccess, setCurrentCompanyCookie } from "@/lib/current-company";
 import { buildStorageKey, uploadObject, deleteObject } from "@/lib/storage";
+import { DEFAULT_EXPENSE_CATEGORIES } from "@/lib/default-expense-categories";
 
 const companySchema = z.object({
   name: z.string().min(1, "Company name is required"),
@@ -70,6 +71,14 @@ export async function createCompany(formData: FormData) {
       expensePrefix: data.expensePrefix.toUpperCase(),
       quotationPrefix: data.quotationPrefix.toUpperCase(),
       users: { create: { userId: session.user.id, isDefault: false } },
+      expenseCategories: {
+        create: DEFAULT_EXPENSE_CATEGORIES.map((c) => ({
+          name: c.name,
+          icon: c.icon,
+          vatDeductible: c.vatDeductible,
+          isDefault: true,
+        })),
+      },
     },
   });
 

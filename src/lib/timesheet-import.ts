@@ -23,13 +23,16 @@ export type TimesheetEntry = {
  */
 const PROJECT_RULES: { match: string; mode: "override" | "abbreviate"; value: string }[] = [];
 
+// Invoice line items have no separate date column (see line-items-editor.tsx's Line type),
+// so the entry's date is folded into the description text itself — otherwise it's silently
+// dropped once a parsed row is turned into an invoice line.
 export function buildLineDescription(entry: TimesheetEntry): string {
   const rule = PROJECT_RULES.find((r) => r.match === entry.project);
-  if (rule?.mode === "override") return rule.value;
+  if (rule?.mode === "override") return `${entry.date} - ${rule.value}`;
 
   const projectLabel = rule?.mode === "abbreviate" ? rule.value : entry.project;
   const notes = entry.notes.replace(/\r?\n+/g, " | ").trim();
-  const parts = [projectLabel, entry.task, notes].filter(Boolean);
+  const parts = [entry.date, projectLabel, entry.task, notes].filter(Boolean);
   return parts.join(" - ");
 }
 

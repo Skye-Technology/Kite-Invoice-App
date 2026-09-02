@@ -11,6 +11,8 @@ import { computeTotals, toDecimalString } from "@/lib/money";
 import { nextInvoiceNumber } from "@/lib/numbering";
 import { deriveInvoiceStatus } from "@/lib/status";
 import { parseTimesheetXlsx, type TimesheetLine } from "@/lib/timesheet-import";
+import { parseHistoricalInvoicesXlsx } from "@/lib/invoice-import";
+import { addDays } from "@/lib/date";
 
 const lineSchema = z.object({
   description: z.string().min(1, "Description is required"),
@@ -333,4 +335,117 @@ export async function parseTimesheetImport(
 
   const buffer = Buffer.from(await file.arrayBuffer());
   return parseTimesheetXlsx(buffer);
+}
+
+const MAX_HISTORICAL_IMPORT_BYTES = 5 * 1024 * 1024; // 5MB
+
+export type HistoricalImportResult = {
+  imported: number;
+  skipped: { rowNumber: number; invoiceNumber: string; message: string }[];
+};
+
+/**
+ * Imports a spreadsheet of historical invoices as lightweight records — for keeping the
+ * total/history on file, not full re-billable invoices: no line items, doesn't touch the
+ * company's next-invoice-number sequence (the number comes from the spreadsheet), and each
+ * row is created independently so one bad row (duplicate number, unknown format) doesn't
+ * block the rest of the batch.
+ */
+export async function importHistoricalInvoices(
+  companyId: string,
+  formData: FormData
+): Promise<HistoricalImportResult> {
+  const session = await auth();
+  if (!session?.user) throw new Error("Not authenticated.");
+  await requireCompanyAccess(session.user.id, companyId);
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) throw new Error("Choose a file.");
+  if (file.size > MAX_HISTORICAL_IMPORT_BYTES) throw new Error("File must be under 5MB.");
+  if (
+    ![
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/octet-stream",
+    ].includes(file.type)
+  ) {
+    throw new Error(
+      "File must be an .xlsx spreadsheet — if it's a legacy .xls export, open it in Excel/Sheets and re-save as .xlsx first."
+    );
+  }
+
+  const company = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { rows, errors } = await parseHistoricalInvoicesXlsx(buffer, company.defaultCurrency);
+
+  const skipped: HistoricalImportResult["skipped"] = errors.map((e) => ({
+    rowNumber: e.rowNumber,
+    invoiceNumber: "",
+    message: e.message,
+  }));
+  let imported = 0;
+
+  for (const row of rows) {
+    try {
+      let contact = await prisma.contact.findFirst({
+        where: { companyId, name: { equals: row.customerName, mode: "insensitive" } },
+      });
+      if (!contact) {
+        contact = await prisma.contact.create({
+          data: {
+            companyId,
+            name: row.customerName,
+            isCustomer: true,
+            defaultCurrency: row.currency,
+          },
+        });
+      }
+
+      // The spreadsheet may not carry a due date (Gekko's export doesn't) — fall back to the
+      // customer's own payment terms rather than the issue date itself, same as every other
+      // invoice-creating path in this app (createInvoice, duplicateInvoice).
+      const dueDate = row.dueDate ?? addDays(row.issueDate, contact.paymentTermsDays);
+
+      const status =
+        row.status ??
+        deriveInvoiceStatus({
+          currentStatus: "SENT",
+          totalAmount: row.totalAmount,
+          amountPaid: row.amountPaid,
+          dueDate: new Date(dueDate),
+        });
+      const amountPaid = status === "DRAFT" || status === "CANCELLED" ? "0.00" : row.amountPaid;
+      const balanceDue = toDecimalString(new Decimal(row.totalAmount).minus(amountPaid));
+
+      await prisma.invoice.create({
+        data: {
+          companyId,
+          customerId: contact.id,
+          invoiceNumber: row.invoiceNumber,
+          issueDate: new Date(row.issueDate),
+          dueDate: new Date(dueDate),
+          currency: row.currency,
+          status,
+          subtotal: row.subtotal,
+          taxTotal: row.taxTotal,
+          totalAmount: row.totalAmount,
+          amountPaid,
+          balanceDue,
+          isHistorical: true,
+        },
+      });
+      imported++;
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.includes("Unique constraint")
+          ? "An invoice with this number already exists."
+          : error instanceof Error
+            ? error.message
+            : "Failed to import this row.";
+      skipped.push({ rowNumber: row.rowNumber, invoiceNumber: row.invoiceNumber, message });
+    }
+  }
+
+  revalidatePath("/invoices");
+  revalidatePath("/");
+  return { imported, skipped };
 }

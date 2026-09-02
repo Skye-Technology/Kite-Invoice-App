@@ -49,6 +49,7 @@ export default async function EditExpensePage({
           referenceNumber: expense.referenceNumber ?? "",
           notes: expense.notes ?? "",
           reimbursable: expense.status === "REIMBURSABLE",
+          reverseCharge: expense.reverseCharge,
           lines: expense.lines.map((line) => ({
             description: line.description,
             quantity: String(line.quantity),

@@ -14,7 +14,10 @@ export default async function NewExpensePage() {
 
   const [vendors, categories] = await Promise.all([
     prisma.contact.findMany({ where: { companyId: current.id, isSupplier: true }, orderBy: { name: "asc" } }),
-    prisma.expenseCategory.findMany({ where: { companyId: current.id }, orderBy: { name: "asc" } }),
+    prisma.expenseCategory.findMany({
+      where: { companyId: current.id, isArchived: false },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   return (

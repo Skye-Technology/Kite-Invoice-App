@@ -25,14 +25,30 @@ export const emptyLine = (): Line => ({
   taxRate: "0",
 });
 
+// Formats the gross (inc-VAT) display value for the "inclusive" amount mode — trims trailing
+// zeros from the raw computation so the field doesn't jitter (e.g. "50" vs "50.00") while the
+// user is still typing, but still rounds to cents for display.
+function grossRateDisplay(unitRate: string, taxRate: string): string {
+  const gross = Number(unitRate || 0) * (1 + Number(taxRate || 0));
+  return gross === 0 ? "" : gross.toFixed(2);
+}
+
 export function LineItemsEditor({
   lines,
   onChange,
   currency,
+  amountMode = "exclusive",
 }: {
   lines: Line[];
   onChange: (lines: Line[]) => void;
   currency: string;
+  // "exclusive" (default): the Rate column is the ex-VAT unit price, tax is added on top —
+  // correct for invoicing, where you set your price and VAT is charged in addition.
+  // "inclusive": the Rate column is the gross (inc-VAT) amount, matching how expense receipts
+  // are read — you see a total on the receipt, not a pre-tax price. Line.unitRate is always
+  // stored ex-VAT either way (that's what computeTotals/the DB expect); "inclusive" mode just
+  // converts what the user types into that same underlying net value.
+  amountMode?: "exclusive" | "inclusive";
 }) {
   const totals = useMemo(
     () =>
@@ -74,7 +90,9 @@ export function LineItemsEditor({
             <tr>
               <th className="px-3 py-2 font-medium">Description</th>
               <th className="w-20 px-3 py-2 font-medium">Qty</th>
-              <th className="w-28 px-3 py-2 font-medium">Rate</th>
+              <th className="w-28 px-3 py-2 font-medium">
+                {amountMode === "inclusive" ? "Amount (inc. VAT)" : "Rate"}
+              </th>
               <th className="w-24 px-3 py-2 font-medium">Tax</th>
               <th className="w-28 px-3 py-2 text-right font-medium">Amount</th>
               <th className="w-10" />
@@ -108,15 +126,37 @@ export function LineItemsEditor({
                     <input
                       type="number"
                       step="0.01"
-                      value={line.unitRate}
-                      onChange={(e) => updateLine(index, { unitRate: e.target.value })}
+                      value={
+                        amountMode === "inclusive"
+                          ? grossRateDisplay(line.unitRate, line.taxRate)
+                          : line.unitRate
+                      }
+                      onChange={(e) => {
+                        if (amountMode === "inclusive") {
+                          const net = Number(e.target.value || 0) / (1 + Number(line.taxRate || 0));
+                          updateLine(index, { unitRate: net.toFixed(2) });
+                        } else {
+                          updateLine(index, { unitRate: e.target.value });
+                        }
+                      }}
                       className="w-full rounded border border-neutral-200 px-2 py-1 text-sm outline-none focus:border-neutral-500"
                     />
                   </td>
                   <td className="px-3 py-2">
                     <select
                       value={line.taxRate}
-                      onChange={(e) => updateLine(index, { taxRate: e.target.value })}
+                      onChange={(e) => {
+                        // In inclusive mode, changing the VAT rate should keep the gross
+                        // amount the user typed stable (it's what the receipt says) and
+                        // recompute the underlying net unitRate instead of the reverse.
+                        if (amountMode === "inclusive") {
+                          const gross = Number(line.unitRate || 0) * (1 + Number(line.taxRate || 0));
+                          const net = gross / (1 + Number(e.target.value || 0));
+                          updateLine(index, { taxRate: e.target.value, unitRate: net.toFixed(2) });
+                        } else {
+                          updateLine(index, { taxRate: e.target.value });
+                        }
+                      }}
                       className="w-full rounded border border-neutral-200 bg-white px-2 py-1 text-sm outline-none focus:border-neutral-500"
                     >
                       {VAT_RATES.map((rate) => (

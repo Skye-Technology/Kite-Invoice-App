@@ -27,17 +27,17 @@ export default async function ExpensesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-neutral-900">Expenses</h2>
+        <h2 className="text-2xl font-bold text-neutral-900">Expenses</h2>
         <div className="flex gap-2">
           <Link
             href="/expense-categories"
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+            className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
           >
             Categories
           </Link>
           <Link
             href="/expenses/new"
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white"
+            className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
           >
             New expense
           </Link>
@@ -47,7 +47,7 @@ export default async function ExpensesPage() {
       {expenses.length === 0 ? (
         <p className="text-sm text-neutral-500">No expenses yet.</p>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-neutral-200 bg-neutral-50 text-neutral-500">
               <tr>
@@ -62,7 +62,7 @@ export default async function ExpensesPage() {
             </thead>
             <tbody className="divide-y divide-neutral-100">
               {expenses.map((expense) => (
-                <tr key={expense.id}>
+                <tr key={expense.id} className="hover:bg-neutral-50">
                   <td className="px-4 py-3 font-medium text-neutral-900">
                     <Link href={`/expenses/${expense.id}`} className="hover:underline">
                       {expense.expenseNumber}

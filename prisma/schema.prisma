@@ -109,6 +109,14 @@ model ExpenseCategory {
   description      String?
   parentCategoryId String?
   taxRateDefault   Decimal  @default(0) @db.Decimal(6, 4)
+  icon             String   @default("❓")
+  isBalanceSheet   Boolean  @default(false)
+  vatDeductible    Boolean  @default(true)
+  // Pre-seeded on company creation (Materials, Car costs, ...), shown in their own section —
+  // archivable like any category but not user-deletable, so historical expenses referencing
+  // one always keep a stable name/icon rather than pointing at something the user renamed.
+  isDefault        Boolean  @default(false)
+  isArchived       Boolean  @default(false)
   createdAt        DateTime @default(now())
 
   company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -147,6 +155,10 @@ model Invoice {
   amountPaid    Decimal       @default(0) @db.Decimal(14, 2)
   balanceDue    Decimal       @default(0) @db.Decimal(14, 2)
   reverseCharge Boolean       @default(false)
+  // True for records imported from a prior system just to keep the total/history on file —
+  // no line items, doesn't consume the company's next-invoice-number sequence, and isn't
+  // expected to have a matching PDF.
+  isHistorical  Boolean       @default(false)
   notes         String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -263,6 +275,7 @@ model Expense {
   totalAmount     Decimal       @default(0) @db.Decimal(14, 2)
   amountPaid      Decimal       @default(0) @db.Decimal(14, 2)
   balanceDue      Decimal       @default(0) @db.Decimal(14, 2)
+  reverseCharge   Boolean       @default(false)
   paymentMethod   String?
   referenceNumber String?
   notes           String?

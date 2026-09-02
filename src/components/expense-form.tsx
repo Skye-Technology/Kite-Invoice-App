@@ -8,6 +8,14 @@ import { CURRENCIES } from "@/lib/currencies";
 type Vendor = { id: string; name: string; defaultCurrency: string; paymentTermsDays: number };
 type Category = { id: string; name: string };
 
+const PAYMENT_TYPES = [
+  "Bank transfer",
+  "Cash or private account",
+  "Credit card",
+  "Direct debit",
+  "Other",
+];
+
 export function ExpenseForm({
   companyId,
   companyCurrency,
@@ -34,6 +42,7 @@ export function ExpenseForm({
     referenceNumber: string;
     notes: string;
     reimbursable: boolean;
+    reverseCharge: boolean;
     lines: Line[];
   };
 }) {
@@ -159,14 +168,21 @@ export function ExpenseForm({
 
         <div>
           <label className="text-sm font-medium text-neutral-700" htmlFor="paymentMethod">
-            Payment method
+            Payment type
           </label>
-          <input
+          <select
             id="paymentMethod"
             name="paymentMethod"
-            defaultValue={initial?.paymentMethod}
-            className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500"
-          />
+            defaultValue={initial?.paymentMethod || ""}
+            className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500"
+          >
+            <option value="">Not specified</option>
+            {PAYMENT_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div>
@@ -227,9 +243,19 @@ export function ExpenseForm({
           />
           Reimbursable
         </label>
+
+        <label className="flex items-center gap-2 self-end pb-2 text-sm text-neutral-700">
+          <input
+            type="checkbox"
+            name="reverseCharge"
+            defaultChecked={initial?.reverseCharge ?? false}
+            className="h-4 w-4 rounded border-neutral-300"
+          />
+          Reverse charge
+        </label>
       </div>
 
-      <LineItemsEditor lines={lines} onChange={setLines} currency={currency} />
+      <LineItemsEditor lines={lines} onChange={setLines} currency={currency} amountMode="inclusive" />
 
       <div>
         <label className="text-sm font-medium text-neutral-700" htmlFor="receipt">

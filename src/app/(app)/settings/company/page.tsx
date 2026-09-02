@@ -23,10 +23,10 @@ export default async function CompanySettingsPage() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-neutral-900">Company settings</h2>
+        <h2 className="text-2xl font-bold text-neutral-900">Company settings</h2>
         <Link
           href="/settings/companies/new"
-          className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+          className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
         >
           Add another company
         </Link>

@@ -28,7 +28,7 @@ export function CompanySwitcher({
           router.refresh();
         });
       }}
-      className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-900"
+      className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-100"
     >
       {companies.map((company) => (
         <option key={company.id} value={company.id}>

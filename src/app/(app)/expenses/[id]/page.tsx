@@ -124,6 +124,23 @@ export default async function ExpenseDetailPage({
             </p>
           </div>
         </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-neutral-100 pt-4 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-neutral-500">VAT</span>
+            <span className="text-neutral-900">
+              {expense.currency} {Number(expense.taxTotal).toFixed(2)}
+            </span>
+            {expense.reverseCharge && (
+              <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">
+                Reverse charge
+              </span>
+            )}
+          </div>
+          {expense.paymentMethod && (
+            <span className="text-neutral-500">{expense.paymentMethod}</span>
+          )}
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">

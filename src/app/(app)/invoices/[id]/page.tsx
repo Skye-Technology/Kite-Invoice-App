@@ -51,27 +51,44 @@ export default async function InvoiceDetailPage({
           <h2 className="text-xl font-semibold text-neutral-900">{invoice.invoiceNumber}</h2>
           <p className="text-sm text-neutral-500">{invoice.customer.name}</p>
         </div>
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_STYLES[invoice.status]}`}
-        >
-          {invoice.status.replace("_", " ")}
-        </span>
+        <div className="flex items-center gap-2">
+          {invoice.isHistorical && (
+            <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-700">
+              Historical
+            </span>
+          )}
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_STYLES[invoice.status]}`}
+          >
+            {invoice.status.replace("_", " ")}
+          </span>
+        </div>
       </div>
 
+      {invoice.isHistorical && (
+        <p className="text-sm text-neutral-500">
+          Imported for record-keeping only — no line items or PDF.
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-2">
-        <a
-          href={`/api/invoices/${invoice.id}/pdf`}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
-        >
-          Download PDF
-        </a>
-        <ActionButton
-          action={duplicateInvoice.bind(null, invoice.id, current.id)}
-          label="Duplicate"
-          pendingLabel="Duplicating..."
-        />
+        {!invoice.isHistorical && (
+          <>
+            <a
+              href={`/api/invoices/${invoice.id}/pdf`}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+            >
+              Download PDF
+            </a>
+            <ActionButton
+              action={duplicateInvoice.bind(null, invoice.id, current.id)}
+              label="Duplicate"
+              pendingLabel="Duplicating..."
+            />
+          </>
+        )}
         {invoice.status === "DRAFT" && (
           <>
             <Link
@@ -152,30 +169,32 @@ export default async function InvoiceDetailPage({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-neutral-200 bg-neutral-50 text-neutral-500">
-            <tr>
-              <th className="px-3 py-2 font-medium">Description</th>
-              <th className="px-3 py-2 font-medium">Qty</th>
-              <th className="px-3 py-2 font-medium">Rate</th>
-              <th className="px-3 py-2 font-medium">Tax</th>
-              <th className="px-3 py-2 text-right font-medium">Amount</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100">
-            {invoice.lines.map((line) => (
-              <tr key={line.id}>
-                <td className="px-3 py-2">{line.description}</td>
-                <td className="px-3 py-2">{Number(line.quantity)}</td>
-                <td className="px-3 py-2">{Number(line.unitRate).toFixed(2)}</td>
-                <td className="px-3 py-2">{(Number(line.taxRate) * 100).toFixed(0)}%</td>
-                <td className="px-3 py-2 text-right">{Number(line.lineAmount).toFixed(2)}</td>
+      {!invoice.isHistorical && (
+        <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-neutral-200 bg-neutral-50 text-neutral-500">
+              <tr>
+                <th className="px-3 py-2 font-medium">Description</th>
+                <th className="px-3 py-2 font-medium">Qty</th>
+                <th className="px-3 py-2 font-medium">Rate</th>
+                <th className="px-3 py-2 font-medium">Tax</th>
+                <th className="px-3 py-2 text-right font-medium">Amount</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {invoice.lines.map((line) => (
+                <tr key={line.id}>
+                  <td className="px-3 py-2">{line.description}</td>
+                  <td className="px-3 py-2">{Number(line.quantity)}</td>
+                  <td className="px-3 py-2">{Number(line.unitRate).toFixed(2)}</td>
+                  <td className="px-3 py-2">{(Number(line.taxRate) * 100).toFixed(0)}%</td>
+                  <td className="px-3 py-2 text-right">{Number(line.lineAmount).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {invoice.notes && (
         <div>

@@ -31,6 +31,7 @@ const expenseSchema = z.object({
   referenceNumber: z.string().optional(),
   notes: z.string().optional(),
   reimbursable: z.string().optional(),
+  reverseCharge: z.string().optional(),
   linesJson: z.string().min(1),
 });
 
@@ -102,6 +103,7 @@ export async function createExpense(formData: FormData) {
       taxTotal: toDecimalString(taxTotal),
       totalAmount: toDecimalString(totalAmount),
       balanceDue: toDecimalString(totalAmount),
+      reverseCharge: base.reverseCharge === "on",
       paymentMethod: base.paymentMethod || null,
       referenceNumber: base.referenceNumber || null,
       notes: base.notes || null,
@@ -158,6 +160,7 @@ export async function updateExpense(expenseId: string, formData: FormData) {
         taxTotal: toDecimalString(taxTotal),
         totalAmount: toDecimalString(totalAmount),
         balanceDue: toDecimalString(totalAmount),
+        reverseCharge: base.reverseCharge === "on",
         paymentMethod: base.paymentMethod || null,
         referenceNumber: base.referenceNumber || null,
         notes: base.notes || null,
@@ -218,6 +221,7 @@ export async function duplicateExpense(expenseId: string, companyId: string) {
       taxTotal: source.taxTotal,
       totalAmount: source.totalAmount,
       balanceDue: source.totalAmount,
+      reverseCharge: source.reverseCharge,
       paymentMethod: source.paymentMethod,
       notes: source.notes,
       lines: {
