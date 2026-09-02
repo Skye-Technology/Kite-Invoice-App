@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kite
+      POSTGRES_PASSWORD: kite
+      POSTGRES_DB: kite
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kite -d kite"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: kite
+      MINIO_ROOT_PASSWORD: kite-secret
+    ports:
+      - "9010:9000"
+      - "9011:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 kite kite-secret &&
+      mc mb -p local/kite-attachments &&
+      mc anonymous set download local/kite-attachments
+      "
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://kite:kite@postgres:5432/kite
+      STORAGE_ENDPOINT: http://minio:9000
+      # Auth.js v5 rejects the request's Host header in production builds unless told
+      # to trust it — needed here since the app sits behind no reverse proxy of its own.
+      AUTH_TRUST_HOST: "true"
+      # Without this, Auth.js infers the canonical URL from the container's internal
+      # hostname (e.g. http://<container-id>:3000), which a browser on the host can't
+      # resolve — redirects after sign-in would 404. Must match how you actually reach it.
+      AUTH_URL: http://localhost:3010
+    ports:
+      - "3010:3000"
+
+volumes:
+  postgres_data:
+  minio_data:

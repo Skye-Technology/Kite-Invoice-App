@@ -1,0 +1,387 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth / tenancy
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  companies    UserCompany[]
+}
+
+model Company {
+  id                 String   @id @default(cuid())
+  name               String
+  address            String?
+  email              String?
+  phone              String?
+  website            String?
+  registrationNumber String?
+  taxNumber          String?
+  defaultCurrency    String   @default("EUR")
+  invoiceNumberSeq   Int      @default(0)
+  invoicePrefix      String   @default("INV")
+  expenseNumberSeq   Int      @default(0)
+  expensePrefix      String   @default("EXP")
+  quotationNumberSeq Int      @default(0)
+  quotationPrefix    String   @default("QUO")
+  logoStorageKey     String?
+  logoContentType    String?
+  bankAccount        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  users             UserCompany[]
+  contacts          Contact[]
+  expenseCategories ExpenseCategory[]
+  invoices          Invoice[]
+  expenses          Expense[]
+  quotations        Quotation[]
+  paymentReceipts   PaymentReceipt[]
+  expensePayments   ExpensePayment[]
+  attachments       Attachment[]
+}
+
+model UserCompany {
+  id        String  @id @default(cuid())
+  userId    String
+  companyId String
+  isDefault Boolean @default(false)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+}
+
+// ---------------------------------------------------------------------------
+// Contacts
+// ---------------------------------------------------------------------------
+
+// Unified contact record — a single entity you invoice (customer), pay (supplier), or
+// both, matching Gekko's model. isCustomer/isSupplier are independent flags rather than
+// a single type, since a company can legitimately be both (you bill them AND get billed
+// by them) without needing two duplicate records.
+model Contact {
+  id                 String   @id @default(cuid())
+  companyId          String
+  name               String
+  isCustomer         Boolean  @default(false)
+  isSupplier         Boolean  @default(false)
+  contactPerson      String?
+  email              String?
+  phone              String?
+  address            String?
+  city               String?
+  postalCode         String?
+  country            String?
+  registrationNumber String?
+  website            String?
+  defaultCurrency    String   @default("EUR")
+  paymentTermsDays   Int      @default(14)
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  company              Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoicesAsCustomer   Invoice[]   @relation("InvoiceCustomer")
+  expensesAsSupplier   Expense[]   @relation("ExpenseSupplier")
+  quotationsAsCustomer Quotation[] @relation("QuotationCustomer")
+
+  @@index([companyId])
+}
+
+model ExpenseCategory {
+  id               String   @id @default(cuid())
+  companyId        String
+  name             String
+  description      String?
+  parentCategoryId String?
+  taxRateDefault   Decimal  @default(0) @db.Decimal(6, 4)
+  createdAt        DateTime @default(now())
+
+  company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parentCategory ExpenseCategory?  @relation("CategoryHierarchy", fields: [parentCategoryId], references: [id])
+  subCategories  ExpenseCategory[] @relation("CategoryHierarchy")
+  expenses       Expense[]
+
+  @@index([companyId])
+}
+
+// ---------------------------------------------------------------------------
+// Invoices
+// ---------------------------------------------------------------------------
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  PARTIALLY_PAID
+  OVERDUE
+  CANCELLED
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  companyId     String
+  customerId    String
+  invoiceNumber String
+  issueDate     DateTime
+  dueDate       DateTime
+  currency      String
+  status        InvoiceStatus @default(DRAFT)
+  subtotal      Decimal       @default(0) @db.Decimal(14, 2)
+  taxTotal      Decimal       @default(0) @db.Decimal(14, 2)
+  totalAmount   Decimal       @default(0) @db.Decimal(14, 2)
+  amountPaid    Decimal       @default(0) @db.Decimal(14, 2)
+  balanceDue    Decimal       @default(0) @db.Decimal(14, 2)
+  reverseCharge Boolean       @default(false)
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer        Contact          @relation("InvoiceCustomer", fields: [customerId], references: [id])
+  lines           InvoiceLine[]
+  paymentReceipts PaymentReceipt[]
+  attachments     Attachment[]
+  sourceQuotation Quotation?       @relation("QuotationConvertedInvoice")
+
+  @@unique([companyId, invoiceNumber])
+  @@index([companyId])
+  @@index([customerId])
+}
+
+model InvoiceLine {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  quantity    Decimal  @db.Decimal(12, 2)
+  description String
+  unitRate    Decimal  @db.Decimal(14, 2)
+  taxRate     Decimal  @default(0) @db.Decimal(6, 4)
+  lineAmount  Decimal  @db.Decimal(14, 2)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+// ---------------------------------------------------------------------------
+// Quotations
+// ---------------------------------------------------------------------------
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  CONVERTED
+}
+
+model Quotation {
+  id                 String          @id @default(cuid())
+  companyId          String
+  customerId         String
+  quotationNumber    String
+  issueDate          DateTime
+  validUntilDate     DateTime
+  currency           String
+  status             QuotationStatus @default(DRAFT)
+  subtotal           Decimal         @default(0) @db.Decimal(14, 2)
+  taxTotal           Decimal         @default(0) @db.Decimal(14, 2)
+  totalAmount        Decimal         @default(0) @db.Decimal(14, 2)
+  notes              String?
+  convertedInvoiceId String?         @unique
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  company          Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer         Contact         @relation("QuotationCustomer", fields: [customerId], references: [id])
+  convertedInvoice Invoice?        @relation("QuotationConvertedInvoice", fields: [convertedInvoiceId], references: [id])
+  lines            QuotationLine[]
+
+  @@unique([companyId, quotationNumber])
+  @@index([companyId])
+  @@index([customerId])
+}
+
+model QuotationLine {
+  id          String   @id @default(cuid())
+  quotationId String
+  quantity    Decimal  @db.Decimal(12, 2)
+  description String
+  unitRate    Decimal  @db.Decimal(14, 2)
+  taxRate     Decimal  @default(0) @db.Decimal(6, 4)
+  lineAmount  Decimal  @db.Decimal(14, 2)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([quotationId])
+}
+
+// ---------------------------------------------------------------------------
+// Expenses
+// ---------------------------------------------------------------------------
+
+enum ExpenseStatus {
+  PENDING
+  PAID
+  REIMBURSABLE
+  OVERDUE
+}
+
+model Expense {
+  id              String        @id @default(cuid())
+  companyId       String
+  vendorId        String?
+  categoryId      String?
+  expenseNumber   String
+  expenseDate     DateTime
+  dueDate         DateTime?
+  paymentDate     DateTime?
+  currency        String
+  status          ExpenseStatus @default(PENDING)
+  description     String
+  subtotal        Decimal       @default(0) @db.Decimal(14, 2)
+  taxTotal        Decimal       @default(0) @db.Decimal(14, 2)
+  totalAmount     Decimal       @default(0) @db.Decimal(14, 2)
+  amountPaid      Decimal       @default(0) @db.Decimal(14, 2)
+  balanceDue      Decimal       @default(0) @db.Decimal(14, 2)
+  paymentMethod   String?
+  referenceNumber String?
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vendor          Contact?         @relation("ExpenseSupplier", fields: [vendorId], references: [id])
+  category        ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  lines           ExpenseLine[]
+  expensePayments ExpensePayment[]
+  attachments     Attachment[]
+
+  @@unique([companyId, expenseNumber])
+  @@index([companyId])
+  @@index([vendorId])
+  @@index([categoryId])
+}
+
+model ExpenseLine {
+  id          String   @id @default(cuid())
+  expenseId   String
+  description String
+  quantity    Decimal  @default(1) @db.Decimal(12, 2)
+  unitRate    Decimal  @db.Decimal(14, 2)
+  taxRate     Decimal  @default(0) @db.Decimal(6, 4)
+  lineAmount  Decimal  @db.Decimal(14, 2)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
+}
+
+// ---------------------------------------------------------------------------
+// Payments
+// ---------------------------------------------------------------------------
+
+model PaymentReceipt {
+  id              String   @id @default(cuid())
+  companyId       String
+  invoiceId       String
+  paymentDate     DateTime
+  amount          Decimal  @db.Decimal(14, 2)
+  currency        String
+  exchangeRate    Decimal  @default(1) @db.Decimal(14, 6)
+  convertedAmount Decimal  @db.Decimal(14, 2)
+  paymentMethod   String?
+  referenceNumber String?
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([invoiceId])
+}
+
+model ExpensePayment {
+  id              String   @id @default(cuid())
+  companyId       String
+  expenseId       String
+  paymentDate     DateTime
+  amount          Decimal  @db.Decimal(14, 2)
+  currency        String
+  exchangeRate    Decimal  @default(1) @db.Decimal(14, 6)
+  convertedAmount Decimal  @db.Decimal(14, 2)
+  paymentMethod   String?
+  referenceNumber String?
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([expenseId])
+}
+
+model FxRate {
+  id            String    @id @default(cuid())
+  baseCurrency  String
+  quoteCurrency String
+  rate          Decimal   @db.Decimal(14, 6)
+  validFrom     DateTime
+  validTo       DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([baseCurrency, quoteCurrency, validFrom])
+}
+
+// ---------------------------------------------------------------------------
+// Storage
+// ---------------------------------------------------------------------------
+
+enum AttachmentType {
+  EXPENSE_RECEIPT
+  INVOICE_PDF
+}
+
+model Attachment {
+  id          String         @id @default(cuid())
+  companyId   String
+  storageKey  String
+  fileName    String
+  contentType String
+  sizeBytes   Int
+  relatedType AttachmentType
+  invoiceId   String?
+  expenseId   String?
+  createdAt   DateTime       @default(now())
+
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  expense Expense? @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([invoiceId])
+  @@index([expenseId])
+}
